@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TraceLLM — 自分の言葉で育つノート</title>
+<link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar" id="sidebar">
+ <div class="brand"><button class="plain" id="closeSide" aria-label="メニューを閉じる">☰</button> TraceLLM</div>
+ <label class="search">⌕ <input id="search" aria-label="ページを検索" placeholder="ページを検索…"></label>
+ <div class="side-nav"><button class="nav-btn active" id="pagesNav">▤　ページ</button><button class="nav-btn" id="historyNav">◷　学習履歴</button></div>
+ <div class="side-section"><span>あなたのページ</span><span id="pagesCount">0</span></div>
+ <div class="helper">↔ 左右にスワイプすると本文を学習<br>保存や応答生成だけでは学習しません</div>
+ <div class="page-list" id="pageList"></div>
+ <div class="sidebar-status" id="queueStatus">接続中…</div>
+ <button class="new-page" id="newPage">＋ 新しいページ</button>
+</aside>
+<main class="main">
+ <header class="topbar"><div class="top-left"><button class="plain" id="openSide" aria-label="メニューを開く">☰</button><span class="breadcrumb">ページ /</span><span class="top-title" id="topTitle">TraceLLM</span></div><span class="pill" id="modelVersion">初期モデル</span></header>
+ <div class="viewport" id="welcome"><div class="welcome"><h1>あなたの言葉から、はじめる。</h1><p>1ページは1つのノート。日記や思考を自由に書いてください。</p><p>モデルには、まだ言葉を教えていません。</p><button class="primary" id="firstPage">最初のページを作成</button></div></div>
+ <div class="viewport" id="pageView" hidden><div class="paper">
+  <div class="overline">ページ</div>
+  <input class="paper-title" id="title" aria-label="ページ名" placeholder="無題のページ" maxlength="200">
+  <div class="paper-meta"><span id="updated"></span><span class="dot"></span><span id="revision"></span></div>
+  <div class="section-header"><div class="section-name">▤ ノート本文</div><span class="thin-label" id="saveStatus">保存済み</span></div>
+  <div class="editor-wrap"><textarea class="editor" id="body" aria-label="ノート本文" placeholder="今日考えたこと、日記、メモなどを自由に書く…"></textarea>
+   <div class="editor-foot"><span class="light-note">保存した本文だけを学習対象にします。</span><div class="toolbar"><button class="secondary" id="save">保存</button><button class="primary" id="respond">送信して応答を生成 ↗</button></div></div>
+  </div>
+  <section class="answer-area"><div class="section-header"><div class="section-name">✦ モデルの出力</div><button class="secondary" id="maskToggle" hidden>隠す</button></div>
+   <select id="responseSelect" class="response-select" aria-label="応答履歴" hidden></select><p class="version-note" id="responseMeta"></p>
+   <div id="answerBox" class="answer-box"><div class="nothing">本文を送信すると、その時点のモデルが出力します。</div></div>
+   <div class="response-foot">初期の出力は不自然な文字列です。出力は自動で学習しません。</div>
+  </section>
+  <div class="training-tip">ページ一覧を左右にスワイプすると学習キューへ追加されます。同じページの再投入も可能です。<br><label>次回の反復回数 <input type="range" id="repeats" min="1" max="10" value="2" aria-label="反復回数"> <span id="repeatValue">2</span>周</label><br>更新上限に達した場合、実際に処理した量を履歴に表示します。</div>
+ </div></div>
+ <div class="viewport" id="historyView" hidden><div class="log-content" id="historyContent"></div></div>
+</main>
+<div class="notice" role="status" aria-live="polite" id="toast"></div>
+</div>
+</body></html>
