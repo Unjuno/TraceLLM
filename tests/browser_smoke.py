@@ -12,7 +12,7 @@ import tempfile
 import time
 
 import httpx
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 
 def main():
@@ -48,7 +48,7 @@ def main():
                 page.locator('#body').fill('これは動作確認用の人工文章です。\n自分の記録を書くページを検証します。')
                 page.locator('#title').fill('動作確認ノート')
                 page.locator('#save').click()
-                page.wait_for_function("document.querySelector('#saveStatus').textContent === '保存済み'")
+                expect(page.locator('#saveStatus')).to_have_text('保存済み')
                 initial = httpx.get(url+'/api/status').json()['checkpoint_id']
                 assert httpx.get(url+'/api/history').json()['jobs'] == []
                 page.locator('#respond').click()
@@ -59,7 +59,7 @@ def main():
                 assert page.locator('#reveal').count() == 1
                 for direction in (1, -1):
                     # Wait until the UI action lock is released before each swipe.
-                    page.wait_for_function("!document.querySelector('#respond').disabled")
+                    expect(page.locator('#respond')).to_be_enabled()
                     box = page.locator('.page-row.active').bounding_box()
                     x, y = box['x'] + box['width']/2, box['y'] + box['height']/2
                     page.mouse.move(x,y);page.mouse.down()
@@ -72,12 +72,12 @@ def main():
                         time.sleep(0.1)
                     else:
                         raise AssertionError(f'Swipe not trained: {history}')
-                page.wait_for_function("!document.querySelector('#respond').disabled")
+                expect(page.locator('#respond')).to_be_enabled()
                 page.locator('#historyNav').click()
                 page.locator(f'[data-restore="{initial}"]').wait_for()
                 page.on('dialog',lambda dialog:dialog.accept())
                 page.locator(f'[data-restore="{initial}"]').click()
-                page.wait_for_function("!document.querySelector('#respond').disabled")
+                expect(page.locator('#respond')).to_be_enabled()
                 for _ in range(50):
                     history=httpx.get(url+'/api/history').json()
                     if history['checkpoints'][0]['kind']=='restore':break
@@ -91,7 +91,7 @@ def main():
                 assert page.locator('#title').input_value()=='動作確認ノート'
                 mobile=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
                 mobile.goto(url);mobile.locator('#body').wait_for()
-                assert mobile.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                assert mobile.locator('.app').bounding_box()['width'] <= 390
                 assert not errors, errors
                 browser.close()
             print('PASS: create/edit, masked real generation, left/right training, restore, reload, mobile layout')

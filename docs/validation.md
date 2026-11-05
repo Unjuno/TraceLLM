@@ -15,7 +15,15 @@ metadata, no auto-training, branch restore, queue/restore serialization, current
 checkpoint retention, seven-day rollback after long inactivity, restart, interrupted
 jobs, failed saves, nonfinite updates, tampered checkpoint detection and HTTP guards.
 
-## Not verified
+## GitHub Actions follow-up
+- Initial source commit: `6f2186ce3837c33002510ce88fa15be6c0584824`.
+- Python 3.11 and 3.13 matrix jobs passed the model/API suite on GitHub Actions.
+- The first browser run reached restore after both swipe directions trained, but
+  failed in a test-side `wait_for_function` call because the page CSP rejects eval.
+  Replaced expression evaluation with Playwright locator assertions; the application
+  CSP is unchanged. The next CI run must establish the corrected end-to-end result.
+
+## Not verified locally
 The real-browser test could not navigate to localhost in this container because
 Chromium's administrative URL policy blocked navigation. Policy was not changed.
 The Playwright browser download was also unavailable through container DNS.
