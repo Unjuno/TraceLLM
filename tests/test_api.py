@@ -84,3 +84,24 @@ def test_worker_really_executes(tmp_path):
                 break
             time.sleep(0.05)
         assert job['status'] == 'succeeded'
+
+
+def test_configurable_new_store_and_evaluation_api(tmp_path):
+    from trace_llm.model import Config
+    from trace_llm.training import TrainingConfig
+    with TestClient(create_app(tmp_path, worker=False, config=Config(context=512),
+                               training=TrainingConfig(replay_ratio=0.5)),
+                    base_url='http://localhost') as c:
+        s = c.get('/api/status').json()
+        assert s['config']['context'] == 512 and s['training']['replay_ratio'] == 0.5
+        root = s['checkpoint_id']
+        p = create(c)
+        c.post('/api/feed', headers=HEADERS, json={
+            'page_id':p['id'],'revision':1,'request_key':'test','repeats':1})
+        c.app.state.engine.train_next()
+        result = c.get('/api/evaluations').json()
+        assert len(result['observations']) == 1
+        assert p['body'] not in str(result)
+        r = c.post('/api/pages/'+p['id']+'/responses', headers=HEADERS,
+                   json={'revision':1,'max_new_tokens':2,'checkpoint_id':root})
+        assert r.status_code == 201 and r.json()['checkpoint_id'] == root

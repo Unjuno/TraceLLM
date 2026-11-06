@@ -207,9 +207,16 @@ async function history() {
         '</div><div class="logrow-sub">'+date(j.created)+' · 本文版 '+j.revision+' · '+j.repeats+
         '周を指定<br>'+esc(status[j.status])+
         (j.status==='succeeded'?'<br>新規提示 '+m.new_targets+' / '+m.requested_new_targets+
-          ' tokens · 復習 '+m.replay_targets+' tokens'+(m.capped?' · 更新上限で終了':'')+
+          ' tokens · 復習 '+m.replay_targets+' tokens'+(m.capped?' · 部分処理（'+esc(m.stop_reason||'更新上限')+'）':'')+
           '<br>対象ページLoss '+m.loss_before.toFixed(3)+' → '+m.loss_after.toFixed(3)+
-          ' nats/token（未知文章の評価ではありません）':'')+
+          ' nats/token（学習対象への適合）'+
+          (m.prequential_loss!=null?'<br>初回投入前Loss '+m.prequential_loss.toFixed(3)+
+            '（近似重複は未検査）':'')+
+          (m.retention?.status==='measured'?'<br>過去の学習ページLoss '+
+            m.retention.loss_before.toFixed(3)+' → '+m.retention.loss_after.toFixed(3)+
+            '（保持評価・未学習評価ではありません）':'')+
+          (m.elapsed_seconds!=null?'<br>評価＋更新 '+m.elapsed_seconds.toFixed(3)+
+            '秒 · CPU '+m.process_cpu_seconds.toFixed(3)+'秒（保存時間を除く）':''):'')+
         '</div></div>'+(j.status==='queued'?'<button class="secondary" data-cancel="'+j.id+
           '">取り消し</button>':'')+'</div>';
     }).join('') || '<p class="muted">まだ学習していません。</p>')+'</div>'+ 

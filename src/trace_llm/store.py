@@ -34,11 +34,11 @@ class Store:
         self.path = path
         db = sqlite3.connect(self.path, isolation_level=None)
         try:
-            db.execute('PRAGMA journal_mode=WAL')
-            db.executescript(SCHEMA)
             version = db.execute('PRAGMA user_version').fetchone()[0]
             if version not in (0, 1):
                 raise RuntimeError('Unsupported database version')
+            db.execute('PRAGMA journal_mode=WAL')
+            db.executescript(SCHEMA)
             db.execute('PRAGMA user_version=1')
         finally:
             db.close()

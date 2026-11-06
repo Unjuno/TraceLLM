@@ -17,7 +17,8 @@ class Config:
     dropout: float = 0.1
 
     def __post_init__(self):
-        if (self.layers < 1 or self.width % self.heads or
+        if (any(type(v) is not int or v < 1 for v in
+                (self.layers, self.width, self.heads, self.context)) or self.width % self.heads or
                 (self.width // self.heads) % 2 or not 1 <= self.context <= 1024):
             raise ValueError('Invalid model dimensions')
         if not 0 <= self.dropout < 1:
@@ -34,10 +35,13 @@ class Attention(nn.Module):
         size = config.width // config.heads
         self.register_buffer('freq', 1.0 / (10000 ** (torch.arange(0, size, 2) / size)),
                              persistent=False)
+        angle = torch.outer(torch.arange(config.context), self.freq)
+        self.register_buffer('cos_cache', angle.cos(), persistent=False)
+        self.register_buffer('sin_cache', angle.sin(), persistent=False)
 
     def rotate(self, x):
-        angle = torch.outer(torch.arange(x.size(-2), device=x.device), self.freq)
-        cos, sin = angle.cos(), angle.sin()
+        cos = self.cos_cache[:x.size(-2)]
+        sin = self.sin_cache[:x.size(-2)]
         a, b = x[..., 0::2], x[..., 1::2]
         return torch.stack((a * cos - b * sin, a * sin + b * cos), dim=-1).flatten(-2)
 
@@ -92,8 +96,8 @@ class GPT(nn.Module):
                                ignore_index=-100)
 
 
-def optimizer(model: GPT):
+def optimizer(model: GPT, learning_rate: float = 3e-4):
     return torch.optim.AdamW([
         {'params': [p for p in model.parameters() if p.ndim >= 2], 'weight_decay': 0.01},
         {'params': [p for p in model.parameters() if p.ndim < 2], 'weight_decay': 0.0},
-    ], lr=3e-4, betas=(0.9, 0.95))
+    ], lr=learning_rate, betas=(0.9, 0.95))
