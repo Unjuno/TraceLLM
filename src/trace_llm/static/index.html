@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TraceLLM — 自分の言葉で育つノート</title>
-<link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script>
+<link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/health.css">
+<script src="/static/health.js" defer></script><script src="/static/ui_machine.js" defer></script><script src="/static/app.js" defer></script>
 </head>
 <body>
 <div class="app">
 <aside class="sidebar" id="sidebar">
  <div class="brand"><button class="plain" id="closeSide" aria-label="メニューを閉じる">☰</button> TraceLLM</div>
  <label class="search">⌕ <input id="search" aria-label="ページを検索" placeholder="ページを検索…"></label>
- <div class="side-nav"><button class="nav-btn active" id="pagesNav">▤　ページ</button><button class="nav-btn" id="historyNav">◷　学習履歴</button></div>
+ <div class="side-nav"><button class="nav-btn active" id="pagesNav">▤　ページ</button><button class="nav-btn" id="healthNav">▥　学習の健全性</button><button class="nav-btn" id="historyNav">◷　学習履歴</button></div>
  <div class="side-section"><span>あなたのページ</span><span id="pagesCount">0</span></div>
  <div class="helper">↔ 左右にスワイプすると本文を学習<br>保存や応答生成だけでは学習しません</div>
  <div class="page-list" id="pageList"></div>
@@ -18,13 +19,17 @@
  <button class="new-page" id="newPage">＋ 新しいページ</button>
 </aside>
 <main class="main">
- <header class="topbar"><div class="top-left"><button class="plain" id="openSide" aria-label="メニューを開く">☰</button><span class="breadcrumb">ページ /</span><span class="top-title" id="topTitle">TraceLLM</span></div><span class="pill" id="modelVersion">初期モデル</span></header>
- <div class="viewport" id="welcome"><div class="welcome"><h1>あなたの言葉から、はじめる。</h1><p>1ページは1つのノート。日記や思考を自由に書いてください。</p><p>モデルには、まだ言葉を教えていません。</p><button class="primary" id="firstPage">最初のページを作成</button></div></div>
+ <header class="topbar"><div class="top-left"><button class="plain" id="openSide" aria-label="メニューを開く">☰</button><span class="breadcrumb">ページ /</span><span class="top-title" id="topTitle">TraceLLM</span></div><div class="top-indicators"><span id="operationStatus" class="operation-status" role="status" hidden></span><span id="connectionStatus" class="connection-state" role="status">接続を確認中…</span><span class="pill" id="modelVersion">初期モデル</span></div></header>
+ <div class="viewport" id="welcome"><div class="welcome"><h1>あなたの言葉から、はじめる。</h1><p>1ページは1つのノート。日記や思考を自由に書いてください。</p><p>文章を保存しただけでは学習しません。ページを左右にスワイプすると、モデルに取り込めます。</p><button class="primary" id="firstPage">最初のページを作成</button></div></div>
  <div class="viewport" id="pageView" hidden><div class="paper">
   <div class="overline">ページ</div>
   <input class="paper-title" id="title" aria-label="ページ名" placeholder="無題のページ" maxlength="200">
   <div class="paper-meta"><span id="updated"></span><span class="dot"></span><span id="revision"></span></div>
   <div class="section-header"><div class="section-name">▤ ノート本文</div><span class="thin-label" id="saveStatus">保存済み</span></div>
+  <div id="saveConflict" class="save-alert" role="alert" hidden>
+    <div><strong id="saveConflictTitle">保存できませんでした。</strong><p id="saveConflictText">編集中の文章は残っています。</p></div>
+    <div class="save-alert-actions"><button class="primary" id="saveAsNew">新しいページに退避</button><button class="secondary" id="reloadPage">サーバー版を再読込</button></div>
+  </div>
   <div class="editor-wrap"><textarea class="editor" id="body" aria-label="ノート本文" placeholder="今日考えたこと、日記、メモなどを自由に書く…"></textarea>
    <div class="editor-foot"><span class="light-note">保存した本文だけを学習対象にします。</span><div class="toolbar"><button class="secondary" id="save">保存</button><button class="primary" id="respond">送信して応答を生成 ↗</button></div></div>
   </div>
@@ -36,6 +41,32 @@
   <div class="training-tip">ページ一覧を左右にスワイプすると学習キューへ追加されます。同じページの再投入も可能です。<br><label>次回の反復回数 <input type="range" id="repeats" min="1" max="10" value="2" aria-label="反復回数"> <span id="repeatValue">2</span>周</label><br>更新上限に達した場合、実際に処理した量を履歴に表示します。</div>
  </div></div>
  <div class="viewport" id="historyView" hidden><div class="log-content" id="historyContent"></div></div>
+
+ <div class="viewport" id="healthView" hidden><div class="health-shell">
+  <div class="health-heading"><div><div class="overline">LEARNING HEALTH</div><h1>学習の健全性</h1><p>計算の正常性と、言葉の予測が上達したかを分けて確認します。</p></div><span class="health-local">ローカルのみ</span></div>
+  <div class="health-controls">
+   <label>モデルの履歴<select id="healthScope"><option value="current">現在のモデルの系譜</option><option value="all">すべての分岐</option></select></label>
+   <label>期間<select id="healthDays"><option value="7">直近7日間</option><option value="30">直近30日間</option><option value="0">全期間</option></select></label>
+   <button class="secondary" id="healthRefresh">更新</button><button class="secondary" id="healthExport" disabled>計測JSONを保存</button>
+  </div>
+  <div class="health-refresh"><span id="healthConnection" role="status">データを取得しています</span><time id="healthUpdated"></time></div>
+  <div id="healthError" class="health-error" role="alert" hidden></div>
+  <div id="healthSummary" class="health-summary"></div>
+  <div class="health-boundary"><strong>汎化・会話能力：未評価</strong><span>独立した検証データはありません。初回投入の文章にも類似文が含まれる可能性があります。Lossが下がっただけでは、能力が向上したとは判定しません。</span></div>
+  <p class="health-selection" id="healthSelection"></p>
+  <div class="health-charts">
+   <section class="health-panel" aria-labelledby="firstSeenTitle"><div class="health-panel-head"><h2 id="firstSeenTitle">初回投入前の予測誤差</h2><span class="health-tag">新しいページ</span></div><p class="health-caption">学習する直前のLoss。小さいほど予測誤差は小さい。ページごとに難しさが違うため、点を線で結びません。</p><div id="healthFirstChart" class="health-chart"></div></section>
+   <section class="health-panel" aria-labelledby="retentionTitle"><div class="health-panel-head"><h2 id="retentionTitle">過去の文章の保持</h2><span class="health-tag">学習済みの資料</span></div><p class="health-caption">同じ過去資料の「学習後 − 学習前」。正なら誤差が増加。ジョブ間では評価した資料が異なる場合があります。</p><div id="healthRetentionChart" class="health-chart"></div></section>
+  </div>
+  <section class="health-panel health-jobs"><div class="health-panel-head"><h2>学習ごとの記録</h2><span id="healthRowCount" class="health-tag"></span></div><p class="health-caption">Loss：nats / 教師トークン（バイトとEOS）。提示量はPaddingを除きます。処理時間はモデル読込・評価・更新を含み、保存処理を除きます。</p>
+   <div class="health-table-wrap" tabindex="0" role="region" aria-label="学習の測定値一覧。横にスクロールできます"><table class="health-table"><caption class="sr-only">表示中の学習ジョブの測定値。欠損値はダッシュで表示します。</caption><thead><tr><th scope="col">ページ / 投入</th><th scope="col">対象ページLoss<br>前 → 後</th><th scope="col">保持の変化</th><th scope="col">提示量<br>新規 / 復習</th><th scope="col">処理時間</th><th scope="col">状態</th><th scope="col">詳細</th></tr></thead><tbody id="healthRows"></tbody></table></div>
+  </section>
+  <section class="health-panel health-compare" aria-labelledby="compareTitle"><div class="health-panel-head"><h2 id="compareTitle">同じ入力で、出力を比べる</h2><span class="health-tag">学習はしません</span></div><p class="health-caption">保存済みの同じ本文版を使い、温度0・seed 42・最大64トークンで生成します。出力はマスクしたまま保存します。読みやすさは能力向上の証明ではありません。</p>
+   <div class="health-compare-controls"><label>入力に使うページ<select id="healthPage" aria-label="比較するページ"></select></label><label>モデルA<select id="healthModelA" aria-label="比較するモデルA"></select></label><label>モデルB<select id="healthModelB" aria-label="比較するモデルB"></select></label><button class="primary" id="healthCompare" disabled>同じ入力で比較</button></div>
+   <p class="health-caption" id="healthCompareHint">2つの保存済みモデルが必要です。</p><div class="health-outputs" id="healthOutputs"></div>
+  </section>
+  <details class="health-method"><summary>指標の読み方と制約</summary><p>「初回」は、現在の系譜のページIDと本文の完全一致ハッシュによる分類です。編集したページや同じ文章の再投入は、初回のグラフに混ぜません。近似重複は未検査です。</p><p>保持は、過去に学習した資料の一部を同じジョブの前後で比較します。正の差はその資料での誤差増加を意味しますが、統計的に確認された忘却ではありません。処理中に対象ページが削除された場合、その保持評価は使いません。</p><p>グラフと表は最近120件、上の集計は選択した期間・系譜全体です。別分岐を含むときは、共通の学習を重複した独立観測とはみなせません。使用中のモデルは7日を過ぎても保持します。復元は「学習履歴」で行います。</p><p>この画面は計測の読み取り専用です。CPU時間はプロセスで消費した時間であり、使用率ではありません。JSON保存に本文・ページ名・生成文は含めません。記録された失敗と欠損は隠さず表示し、健全性スコアは作りません。</p></details>
+ </div></div>
 </main>
 <div class="notice" role="status" aria-live="polite" id="toast"></div>
 </div>

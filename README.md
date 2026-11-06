@@ -7,9 +7,19 @@
 同じページを何度でも投入でき、反復回数は1〜10周で指定できます。
 モデル出力は初期状態で非表示。クリックすると生成時の出力を確認できます。
 
-**v0.2は実験用の単一ユーザー・ローカルアプリです。** ダミー応答ではなく、
+**v0.4は実験用の単一ユーザー・ローカルアプリです。** ダミー応答ではなく、
 ランダム初期化したGPTの実際の推論と勾配更新を行います。学習データがない初期状態の
 出力は不自然な文字列です。日本語の会話能力や「本人の思考の再現」は保証しません。
+
+## v0.4 — 明示的な状態管理と原稿保護
+
+v0.4では、ブラウザの編集中・保存中・競合・エラー・応答マスクを明示的な状態遷移で制御します。
+学習ジョブはSQLite上で`queued → running → succeeded/failed`、または`queued → cancelled`に限定。
+ページ削除と学習完了が重なった場合、公開直前に対象ページ・現用モデル・ジョブ状態を同一トランザクション内で再検証します。
+DB公開に失敗した未登録チェックポイントは後始末します。保存競合でも原稿を失わず、別ページへの退避か明示的な再読込を選べます。
+
+新規モデルの重みや学習データは追加していません。`SQLite version 1`および`checkpoint format 1`を維持。
+状態遷移図、検証対象、残る制約は[`docs/state-machines.md`](docs/state-machines.md)を参照してください。
 
 ## 起動
 
@@ -31,7 +41,11 @@ trace-llm
 ```
 
 ブラウザで `http://127.0.0.1:8000` を開きます。
-保存先の既定値は `~/.local/share/trace-llm/` です。ソースリポジトリとは別の場所です。
+新しい保存先の既定値は、Windowsでは `%LOCALAPPDATA%\TraceLLM`、macOSでは
+`~/Library/Application Support/TraceLLM`、Linuxでは `$XDG_DATA_HOME/trace-llm`
+（未設定時 `~/.local/share/trace-llm`）です。ソースリポジトリとは別の場所です。
+**旧版の `~/.local/share/trace-llm/trace.sqlite3` があれば、その保存先をそのまま使います。**
+自動で移動・統合・作り直しはしません。`--data-dir`、`TRACE_DATA_DIR`、旧保存先、OS既定値の順に優先します。
 
 ```bash
 trace-llm --data-dir /path/to/private/trace-data --port 8000 --threads 2
@@ -40,6 +54,20 @@ trace-llm --data-dir /path/to/private/trace-data --port 8000 --threads 2
 `TRACE_DATA_DIR` 環境変数でも保存先を指定できます。CLI引数が優先されます。
 公開サーバーに配置しないでください。認証・複数ユーザー・複数workerは未対応です。
 二重起動は保存先のファイルロックで拒否します。GPU利用・量子化・compileは未実装です。
+
+## 学習の健全性（v0.3）
+
+左の「学習の健全性」から、処理の失敗・部分処理、初回投入前のLoss、過去資料の保持、
+実際の教師提示量を確認できます。「現在のモデルの系譜 / すべての分岐」「7日 / 30日 / 全期間」を切り替え可能。
+グラフと表は最近120件、上部の集計は選択範囲全体です。欠損値はゼロにしません。
+**処理成功は言語能力の向上ではありません。独立した検証データがないため汎化は未評価と表示します。**
+
+同じ本文版を2つの保存済みモデルに入力し、マスクした出力を比較できます。
+この操作は生成履歴を保存するだけで、モデルを学習・復元しません。
+計測JSONはローカルに保存でき、本文・ページ名・生成文を含みません。
+詳細は [指標とプラットフォーム](docs/health-ui.md) を参照してください。
+
+`python -m trace_llm` でも起動できます。Node.js、デスクトップ実行基盤、CDNは実行時に不要です。
 
 ## 操作
 
@@ -115,6 +143,10 @@ src/trace_llm/
 ```bash
 python -m pip install -e '.[dev]'
 python -m pytest -q
+# UI状態遷移のテスト（開発時のみ。Node.js 18以降）
+node --test tests/ui_machine.test.cjs
+# ローカルAPI連携の画面テスト（Playwright Chromiumを利用）
+python tests/browser_state.py --browser chromium
 # 任意の実ブラウザ検証（毎回、一時保存先と人工文章だけを使用）:
 python -m playwright install chromium
 python tests/browser_smoke.py
@@ -134,6 +166,9 @@ python tests/browser_smoke.py
 
 詳細は [設計](docs/architecture.md) と [安全上の制約](SECURITY.md) を参照してください。
 このリポジトリの利用許諾ライセンスはまだ設定していません。
+
+学習ワーカー自体が停止した場合、サイドバーに「学習ワーカー停止（再起動が必要）」と表示します。
+この表示は学習キューの失敗履歴とは別です。原因を確認した後、安全にアプリを再起動してください。
 
 
 ## v0.2: CPU継続学習の計測と制御
