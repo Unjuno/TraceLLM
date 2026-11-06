@@ -46,6 +46,11 @@ function setView(view) {
   $('welcome').hidden = view !== 'pages' || Boolean(state.page);
   $('pageView').hidden = view !== 'pages' || !state.page;
   $('historyView').hidden = view !== 'history';
+  $('healthView').hidden = view !== 'health';
+  $('healthNav').classList.toggle('active', view === 'health');
+  $('breadcrumb').textContent = view === 'pages' ? 'ページ /' : 'モデル /';
+  $('topTitle').textContent = view === 'health' ? '学習の状態' :
+    view === 'history' ? '学習履歴' : state.page?.title || 'TraceLLM';
   $('pagesNav').classList.toggle('active', view === 'pages');
   $('historyNav').classList.toggle('active', view === 'history');
 }
@@ -241,12 +246,24 @@ async function poll() {
   $('queueStatus').textContent=(s.jobs.running?'学習中 · ':'')+'学習待ち '+(s.jobs.queued||0)+
     '件 · CPU / ローカル';
   if (state.view==='history') await history();
+  if (state.view==='health') await TraceHealth.refresh();
 }
 $('newPage').onclick=$('firstPage').onclick=()=>action(addPage);
 $('save').onclick=()=>action(async()=>{await save();toast('保存しました');});
 $('respond').onclick=()=>action(respond);
 $('pagesNav').onclick=()=>action(async()=>{await save();setView('pages');});
 $('historyNav').onclick=()=>action(async()=>{await save();setView('history');await history();});
+$('healthNav').onclick=()=>action(async()=>{await save();setView('health');await TraceHealth.refresh();});
+TraceHealth.init({api, esc, date,
+  onSnapshot:h=>{
+    if(state.view!=='health')return;
+    state.checkpoint=h.checkpoint_id;
+    $('modelVersion').textContent='Model '+(h.checkpoint_id||'').slice(0,8);
+    const active=h.execution.active_counts;
+    $('queueStatus').textContent=(active.running?'学習中 · ':'')+'学習待ち '+(active.queued||0)+
+      '件 · CPU / ローカル';
+  },
+  history:()=>action(async()=>{setView('history');await history();})});
 $('search').oninput=drawList;
 $('closeSide').onclick=()=>$('sidebar').classList.add('hidden');
 $('openSide').onclick=()=>$('sidebar').classList.toggle('hidden');
@@ -262,4 +279,4 @@ addEventListener('keydown',event=>{
 });
 if (matchMedia('(max-width:720px)').matches) $('sidebar').classList.add('hidden');
 action(async()=>{await refreshPages();await poll();if(state.pages.length)await openPage(state.pages[0].id);});
-setInterval(()=>{if(!state.busy) poll().catch(()=>{$('queueStatus').textContent='接続が切れています';});},2000);
+setInterval(()=>{if(!state.busy) poll().catch(()=>{$('queueStatus').textContent='接続が切れています';if(state.view==='health')TraceHealth.disconnected();});},2000);

@@ -23,3 +23,5 @@ checkpoints/
 *.sqlite*
 *.log
 .DS_Store
+
+artifacts/

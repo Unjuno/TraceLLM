@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TraceLLM — 自分の言葉で育つノート</title>
-<link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/health.css">
+<script src="/static/health.js" defer></script><script src="/static/app.js" defer></script>
 </head>
 <body>
 <div class="app">
 <aside class="sidebar" id="sidebar">
  <div class="brand"><button class="plain" id="closeSide" aria-label="メニューを閉じる">☰</button> TraceLLM</div>
  <label class="search">⌕ <input id="search" aria-label="ページを検索" placeholder="ページを検索…"></label>
- <div class="side-nav"><button class="nav-btn active" id="pagesNav">▤　ページ</button><button class="nav-btn" id="historyNav">◷　学習履歴</button></div>
+ <div class="side-nav"><button class="nav-btn active" id="pagesNav">▤　ページ</button><button class="nav-btn" id="healthNav">◎　学習の状態</button><button class="nav-btn" id="historyNav">◷　学習履歴</button></div>
  <div class="side-section"><span>あなたのページ</span><span id="pagesCount">0</span></div>
  <div class="helper">↔ 左右にスワイプすると本文を学習<br>保存や応答生成だけでは学習しません</div>
  <div class="page-list" id="pageList"></div>
@@ -18,7 +20,7 @@
  <button class="new-page" id="newPage">＋ 新しいページ</button>
 </aside>
 <main class="main">
- <header class="topbar"><div class="top-left"><button class="plain" id="openSide" aria-label="メニューを開く">☰</button><span class="breadcrumb">ページ /</span><span class="top-title" id="topTitle">TraceLLM</span></div><span class="pill" id="modelVersion">初期モデル</span></header>
+ <header class="topbar"><div class="top-left"><button class="plain" id="openSide" aria-label="メニューを開く">☰</button><span class="breadcrumb" id="breadcrumb">ページ /</span><span class="top-title" id="topTitle">TraceLLM</span></div><span class="pill" id="modelVersion">初期モデル</span></header>
  <div class="viewport" id="welcome"><div class="welcome"><h1>あなたの言葉から、はじめる。</h1><p>1ページは1つのノート。日記や思考を自由に書いてください。</p><p>モデルには、まだ言葉を教えていません。</p><button class="primary" id="firstPage">最初のページを作成</button></div></div>
  <div class="viewport" id="pageView" hidden><div class="paper">
   <div class="overline">ページ</div>
@@ -36,6 +38,12 @@
   <div class="training-tip">ページ一覧を左右にスワイプすると学習キューへ追加されます。同じページの再投入も可能です。<br><label>次回の反復回数 <input type="range" id="repeats" min="1" max="10" value="2" aria-label="反復回数"> <span id="repeatValue">2</span>周</label><br>更新上限に達した場合、実際に処理した量を履歴に表示します。</div>
  </div></div>
  <div class="viewport" id="historyView" hidden><div class="log-content" id="historyContent"></div></div>
+ <div class="viewport" id="healthView" hidden><div class="health-content">
+  <header class="health-heading"><div><h1>学習の状態</h1><p>処理の正常性と、言語能力の改善を分けて確認します。</p></div><button class="secondary" id="healthRefresh">更新</button></header>
+  <div class="health-updated" id="healthUpdated" role="status">記録を読み込んでいます…</div>
+  <div class="health-error" id="healthError" role="alert" hidden>最新の状態を取得できません。表示がある場合は前回の観測値です。アプリの起動・接続を確認して「更新」を押してください。</div>
+  <div id="healthContent" aria-busy="true"><p class="muted">計測値を読み込んでいます…</p></div>
+ </div></div>
 </main>
 <div class="notice" role="status" aria-live="polite" id="toast"></div>
 </div>

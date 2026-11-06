@@ -1,5 +1,6 @@
 """Loopback-only HTTP entrypoint. Run one process; no external authentication."""
 import argparse
+from dataclasses import asdict
 from contextlib import asynccontextmanager
 import os
 from pathlib import Path
@@ -11,8 +12,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 import torch
-import uvicorn
 
+from .health import summarize_health
+from .runtime import resolve_data_dir, run_local
 from .engine import Conflict, Engine, Missing
 from .training import TrainingConfig, model_config
 
@@ -48,8 +50,7 @@ class Generation(Payload):
 
 
 def create_app(data_dir=None, worker=True, config=None, training=None):
-    root = Path(data_dir or os.environ.get('TRACE_DATA_DIR',
-                str(Path.home() / '.local' / 'share' / 'trace-llm')))
+    root = resolve_data_dir(data_dir)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -62,7 +63,7 @@ def create_app(data_dir=None, worker=True, config=None, training=None):
         finally:
             engine.close()
 
-    app = FastAPI(title='TraceLLM', version='0.2.0', lifespan=lifespan,
+    app = FastAPI(title='TraceLLM', version='0.3.0', lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', '[::1]'])
 
@@ -153,6 +154,15 @@ def create_app(data_dir=None, worker=True, config=None, training=None):
         app.state.engine.cancel(job_id)
         return {'cancelled': True}
 
+    @app.get('/api/learning-health')
+    def learning_health():
+        engine = app.state.engine
+        result = summarize_health(engine.store)
+        result['runtime'] = {'device': 'cpu', 'precision': 'float32',
+                             'threads': torch.get_num_threads(), 'context': engine.config.context,
+                             'training': asdict(engine.training)}
+        return result
+
     @app.get('/api/evaluations')
     def evaluations():
         return app.state.engine.evaluations()
@@ -177,6 +187,7 @@ def main():
     parser = argparse.ArgumentParser(description='TraceLLM: local scratch language model journal')
     parser.add_argument('--data-dir', type=Path)
     parser.add_argument('--port', type=int, default=8000)
+    parser.add_argument('--open-browser', action='store_true', help='Open the local UI after startup')
     parser.add_argument('--threads', type=int, default=2)
     parser.add_argument('--model-preset', choices=('seed', 'medium', 'small'),
                         help='New data directory only; existing model is never resized')
@@ -204,8 +215,7 @@ def main():
         parser.error(str(exc))
     os.umask(0o077)
     torch.set_num_threads(args.threads)
-    uvicorn.run(create_app(args.data_dir, config=config, training=training), host='127.0.0.1', port=args.port,
-                workers=1, access_log=False)
+    run_local(create_app(args.data_dir, config=config, training=training), args.port, args.open_browser)
 
 
 if __name__ == '__main__':
