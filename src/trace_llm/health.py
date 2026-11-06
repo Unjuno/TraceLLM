@@ -16,8 +16,18 @@ LINEAGE = """WITH RECURSIVE lineage(id) AS (
 
 
 def finite(value):
-    """Legacy/malformed data are missing, not zero. Booleans are not observations."""
-    return value if type(value) in (int, float) and math.isfinite(value) else None
+    """Absolute loss/time observations must be finite and nonnegative.
+
+    Invalid legacy numbers remain missing. A valid signed retention delta is
+    calculated separately from two validated absolute losses.
+    """
+    if type(value) not in (int, float) or value < 0:
+        return None
+    try:
+        return value if math.isfinite(value) else None
+    except OverflowError:
+        # JSON can contain integers too large for math.isfinite's float conversion.
+        return None
 
 
 def count(value):
