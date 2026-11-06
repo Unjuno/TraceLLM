@@ -64,6 +64,8 @@ jobs:
         env:
           OMP_NUM_THREADS: '1'
       - if: runner.os == 'Linux' && matrix.browser == 'chromium'
+        run: python tests/browser_view_contract.py
+      - if: runner.os == 'Linux' && matrix.browser == 'chromium'
         run: python tests/browser_smoke.py
         env:
           OMP_NUM_THREADS: '1'

@@ -91,7 +91,10 @@ def main():
                     page.locator('#healthRefresh').click()
                     expect(page.locator('#healthRefresh')).to_be_enabled()
                     assert httpx.get(url+'/api/status', trust_env=False).json()['checkpoint_id'] == public
+                    assert page.locator('#modelVersion').inner_text() == 'Model '+public[:8]
+                    assert '学習待ち 0件' in page.locator('#queueStatus').inner_text()
                     if args.screenshot:
+                        page.locator('#toast').wait_for(state='hidden', timeout=7000)
                         page.screenshot(path=args.screenshot, full_page=True)
                     # Notebooks stay masked; navigation preserves the editor's content.
                     page.locator('#pagesNav').click()

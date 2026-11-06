@@ -254,7 +254,16 @@ $('respond').onclick=()=>action(respond);
 $('pagesNav').onclick=()=>action(async()=>{await save();setView('pages');});
 $('historyNav').onclick=()=>action(async()=>{await save();setView('history');await history();});
 $('healthNav').onclick=()=>action(async()=>{await save();setView('health');await TraceHealth.refresh();});
-TraceHealth.init({api, esc, date, history:()=>action(async()=>{setView('history');await history();})});
+TraceHealth.init({api, esc, date,
+  onSnapshot:h=>{
+    if(state.view!=='health')return;
+    state.checkpoint=h.checkpoint_id;
+    $('modelVersion').textContent='Model '+(h.checkpoint_id||'').slice(0,8);
+    const active=h.execution.active_counts;
+    $('queueStatus').textContent=(active.running?'学習中 · ':'')+'学習待ち '+(active.queued||0)+
+      '件 · CPU / ローカル';
+  },
+  history:()=>action(async()=>{setView('history');await history();})});
 $('search').oninput=drawList;
 $('closeSide').onclick=()=>$('sidebar').classList.add('hidden');
 $('openSide').onclick=()=>$('sidebar').classList.toggle('hidden');

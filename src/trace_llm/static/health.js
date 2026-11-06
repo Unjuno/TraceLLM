@@ -113,6 +113,7 @@ window.TraceHealth = (() => {
     el('healthContent').setAttribute('aria-busy','true');
     try {
       const h = await helpers.api('/learning-health');
+      helpers.onSnapshot?.(h);
       const next = JSON.stringify({...h, as_of:0, scope:{...h.scope,since:0}});
       if (next !== signature) {render(h); signature=next;}
       el('healthUpdated').textContent = '最終取得 ' + helpers.date(h.as_of) + ' · 自動更新';
