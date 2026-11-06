@@ -1,6 +1,6 @@
 # Security and privacy boundary
 
-TraceLLM v0.1 is a local, single-user research application, not an internet service.
+TraceLLM v0.4 is a local, single-user research application, not an internet service.
 The CLI binds only to 127.0.0.1. Do not put it behind a public proxy or expose its port.
 There is no account authentication, tenant isolation, or at-rest encryption.
 Use OS disk encryption and a private data directory. Local users/processes with

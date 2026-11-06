@@ -19,3 +19,33 @@ body{margin:0;padding:24px;min-height:100vh}.app{position:relative;max-width:139
 
 [hidden]{display:none!important} .toolbar{display:flex;align-items:center;gap:8px} .error{color:#a83636} .response-select{max-width:100%;border:1px solid var(--border);border-radius:8px;padding:7px;background:white;color:#526075} .version-note{font-size:11px;color:#8492a4;margin:8px 0} .pill.warning{color:#875c20} button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #3776d6;outline-offset:2px} .sidebar-status{padding:12px 18px;font-size:11px;color:#7f8b9b} .welcome{padding:60px 30px;text-align:center;color:#778495} .welcome h1{color:#263447}
 .page-dialog{border:1px solid var(--border);border-radius:14px;padding:24px;max-width:440px;color:#2b3645}.page-dialog::backdrop{background:#1c273a77}.page-dialog p{font-size:12px;color:#7f8b9b}.page-dialog button{margin:5px 0}.page-meta{pointer-events:none}
+
+/* Explicit state presentation. These are orthogonal to the underlying notebook and job state. */
+#openSide{display:none}
+.sidebar.hidden ~ .main #openSide{display:inline-flex}
+.top-indicators{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.operation-status{font-size:11px;color:#3a639f;background:#f0f5fc;border:1px solid #dae5f4;padding:6px 9px;border-radius:9px;white-space:nowrap}
+.connection-state{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#607286;white-space:nowrap}
+.connection-state::before{content:'';width:7px;height:7px;border-radius:50%;background:#9aaabe;flex:none}
+.connection-state[data-state="online"]::before{background:#43816b}
+.connection-state[data-state="offline"]{color:#9d433e;font-weight:600}
+.connection-state[data-state="offline"]::before{background:#be5e51}
+.thin-label[data-state="dirty"]{color:#916526;font-weight:650}
+.thin-label[data-state="saving"]{color:#3a639f;font-weight:650}
+.thin-label[data-state="conflict"],.thin-label[data-state="error"]{color:#a23f37;font-weight:700}
+.save-alert{display:flex;gap:18px;align-items:center;justify-content:space-between;background:#fff9f6;border:1px solid #e3beb1;border-left:3px solid #ae634c;border-radius:10px;padding:15px 17px;margin:0 0 18px;color:#603e34}
+.save-alert strong{font-size:13px;line-height:1.6}
+.save-alert p{margin:5px 0 0;font-size:12px;line-height:1.65;color:#75594d}
+.save-alert-actions{display:flex;gap:8px;align-items:center;flex:0 0 auto}
+.save-alert .primary,.save-alert .secondary{white-space:nowrap}
+.paper{max-width:840px}
+.editor{font-size:15px;line-height:1.93}
+.page-name{font-size:13px}
+.page-row:focus-visible{outline:2px solid #3776d6;outline-offset:-2px}
+.nav-btn:focus-visible,.dots:focus-visible,.new-page:focus-visible,.mask-button:focus-visible{outline:2px solid #3776d6;outline-offset:2px}
+.nav-btn[aria-current="page"]{font-weight:700}
+.training-tip label{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.training-tip input[type="range"]{accent-color:#3776d6}
+@media(max-width:1100px){.save-alert{flex-wrap:wrap}.connection-state{font-size:10px}.topbar{padding-inline:18px}}
+@media(max-width:760px){#openSide{display:inline-flex}.top-indicators{gap:7px}.connection-state{font-size:0;gap:0}.connection-state::before{width:8px;height:8px}.save-alert-actions{width:100%;flex-wrap:wrap}.paper{padding:28px 20px 70px}.topbar{padding-inline:14px}}
+@media(prefers-reduced-motion:reduce){.page-row,.editor-wrap,.sidebar{transition:none!important}}

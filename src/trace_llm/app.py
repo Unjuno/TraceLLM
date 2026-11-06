@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -14,6 +14,8 @@ import torch
 import uvicorn
 
 from .engine import Conflict, Engine, Missing
+from .health import health_snapshot
+from .paths import resolve_data_dir
 from .training import TrainingConfig, model_config
 
 STATIC = Path(__file__).parent / 'static'
@@ -48,8 +50,7 @@ class Generation(Payload):
 
 
 def create_app(data_dir=None, worker=True, config=None, training=None):
-    root = Path(data_dir or os.environ.get('TRACE_DATA_DIR',
-                str(Path.home() / '.local' / 'share' / 'trace-llm')))
+    root = resolve_data_dir(data_dir)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -62,7 +63,7 @@ def create_app(data_dir=None, worker=True, config=None, training=None):
         finally:
             engine.close()
 
-    app = FastAPI(title='TraceLLM', version='0.2.0', lifespan=lifespan,
+    app = FastAPI(title='TraceLLM', version='0.4.0', lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', '[::1]'])
 
@@ -156,6 +157,11 @@ def create_app(data_dir=None, worker=True, config=None, training=None):
     @app.get('/api/evaluations')
     def evaluations():
         return app.state.engine.evaluations()
+
+    @app.get('/api/learning-health')
+    def learning_health(scope: str = 'current', days: int = 7,
+                        limit: int = Query(default=120, ge=1, le=500)):
+        return health_snapshot(app.state.engine, scope=scope, days=days, limit=limit)
 
     @app.get('/api/history')
     def history():

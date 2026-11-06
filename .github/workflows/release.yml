@@ -1,0 +1,73 @@
+name: release
+
+# Publish only a successful default-branch commit after the full desktop CI
+# matrix has finished. Never publish artifacts built from untrusted PR code.
+on:
+  workflow_run:
+    workflows: [test]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact tested main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Confirm this is still the tip of main
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$TESTED_SHA"
+      - name: Read version and check for an existing tag
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${VERSION}" --silent 2>/dev/null; then
+            echo 'already_tagged=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'already_tagged=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build release packages
+        if: steps.metadata.outputs.already_tagged == 'false'
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build
+          python -m build
+          python - <<'PY'
+          from pathlib import Path
+          assert len(list(Path('dist').glob('*.whl'))) == 1
+          assert len(list(Path('dist').glob('*.tar.gz'))) == 1
+          PY
+      - name: Publish versioned GitHub Release
+        if: steps.metadata.outputs.already_tagged == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" dist/*.whl dist/*.tar.gz \
+            --repo "$GITHUB_REPOSITORY" --target "$TESTED_SHA" \
+            --title "TraceLLM v${VERSION}" \
+            --notes-file docs/release-notes-v0.4.0.md
