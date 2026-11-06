@@ -1,36 +1,76 @@
-name: test
+name: desktop-test
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   python:
-    runs-on: ubuntu-latest
+    name: python-${{ matrix.os }}-${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.11', '3.13']
+        include:
+          - {os: ubuntu-24.04, python: '3.11'}
+          - {os: ubuntu-24.04, python: '3.13'}
+          - {os: windows-2022, python: '3.12'}
+          - {os: macos-15, python: '3.12'}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: python -m pip install 'torch>=2.10,<2.11' --index-url https://download.pytorch.org/whl/cpu
+          python-version: ${{ matrix.python }}
+      - if: runner.os != 'macOS'
+        run: python -m pip install 'torch>=2.10,<2.11' --index-url https://download.pytorch.org/whl/cpu
+      - if: runner.os == 'macOS'
+        run: python -m pip install 'torch>=2.10,<2.11'
       - run: python -m pip install -e '.[dev]'
+      - run: python scripts/install.py --check
       - run: python -m pytest -q
         env:
           OMP_NUM_THREADS: '1'
       - run: python -m compileall -q src
+      - run: python -m trace_llm --help
+      - run: python -m pip wheel . --no-deps --wheel-dir artifacts/wheels
   browser:
-    runs-on: ubuntu-latest
+    name: browser-${{ matrix.os }}-${{ matrix.browser }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, browser: chromium}
+          - {os: ubuntu-24.04, browser: firefox}
+          - {os: windows-2022, browser: chromium}
+          - {os: macos-15, browser: webkit}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
-      - run: python -m pip install 'torch>=2.10,<2.11' --index-url https://download.pytorch.org/whl/cpu
+          python-version: '3.12'
+      - if: runner.os != 'macOS'
+        run: python -m pip install 'torch>=2.10,<2.11' --index-url https://download.pytorch.org/whl/cpu
+      - if: runner.os == 'macOS'
+        run: python -m pip install 'torch>=2.10,<2.11'
       - run: python -m pip install -e '.[dev]'
-      - run: python -m playwright install --with-deps chromium
-      - run: python tests/browser_smoke.py
+      - run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - run: python -c "from pathlib import Path; Path('artifacts').mkdir(exist_ok=True)"
+      - run: python tests/browser_health.py --browser ${{ matrix.browser }} --screenshot artifacts/learning-health.png
         env:
           OMP_NUM_THREADS: '1'
+      - if: runner.os == 'Linux' && matrix.browser == 'chromium'
+        run: python tests/browser_smoke.py
+        env:
+          OMP_NUM_THREADS: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: health-${{ matrix.os }}-${{ matrix.browser }}
+          path: artifacts/*.png
+          if-no-files-found: ignore
+          retention-days: 7

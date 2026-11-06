@@ -1,0 +1,50 @@
+/* Local, accessible desktop observation view; status is always written in text. */
+.health-content{max-width:1120px;padding:32px 32px 60px;margin:auto;color:#243042}
+.health-heading{display:flex;gap:20px;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.health-heading h1{font-size:28px;letter-spacing:-.035em;margin:0 0 8px}
+.health-heading p{font-size:13px;line-height:1.8;color:#626f80;margin:0}
+.health-updated{font-size:11px;color:#687587;min-height:18px;margin-bottom:16px}
+.health-scope{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:11px;color:#667386;margin-bottom:18px}
+.health-chip{border:1px solid #dce5ef;border-radius:20px;padding:5px 10px;background:#f5f8fc;color:#375675}
+.health-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.health-card{border:1px solid #e0e6ee;border-radius:12px;padding:18px;background:#fff;min-width:0}
+.health-card h2,.health-panel h2,.health-recovery h2{margin:0;font-size:13px;line-height:1.6;font-weight:700}
+.health-card-value{font-size:18px;font-weight:750;letter-spacing:-.03em;line-height:1.5;margin:13px 0 10px}
+.health-card p{font-size:11px;line-height:1.9;color:#647183;margin:0}
+.health-card.caution{border-color:#dbb784;background:#fffaf3}
+.health-card.caution .health-card-value,.health-caution{color:#84520b}
+.health-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:22px 0;border:1px solid #e7ebf0;border-radius:10px;background:#f8fafc}
+.health-metrics>div{padding:15px;border-right:1px solid #e7ebf0;min-width:0}
+.health-metrics>div:last-child{border:0}
+.health-metrics h3{font-size:11px;font-weight:600;color:#647183;margin:0 0 9px}
+.health-metrics strong{font-size:23px;line-height:1.4;font-variant-numeric:tabular-nums;display:block;overflow-wrap:anywhere}
+.health-metrics span{display:block;font-size:10px;line-height:1.8;color:#667386;margin-top:6px}
+.health-panel{border:1px solid #e1e6ed;border-radius:12px;padding:20px;margin-top:16px;background:white}
+.health-panel-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;align-items:baseline}
+.health-panel-heading>span{font-size:10px;color:#657386}
+.health-description{font-size:11px;color:#657386;line-height:1.9;margin:8px 0 12px}
+.health-chart{width:100%;max-height:210px;display:block}
+.health-gridline{stroke:#e7ecf2;stroke-width:1}
+.health-point{fill:#3776d6;stroke:#fff;stroke-width:1.5}
+.health-axis{fill:#657386;font-size:10px;font-family:inherit}
+.health-chart-unit{font-size:10px;color:#657386;margin-top:12px}
+.health-empty{padding:26px 18px;text-align:center;background:#fafbfd;border:1px dashed #dce3ed;border-radius:8px;margin:12px 0;color:#667386;font-size:12px;line-height:1.9}
+.health-table-wrap{max-width:100%;overflow:auto}
+.health-table{border-collapse:collapse;width:100%;font-size:11px;line-height:1.7;text-align:left}
+.health-table caption{text-align:left;color:#657386;font-size:10px;caption-side:bottom;padding-top:10px}
+.health-table th{font-weight:600;font-size:10px;color:#5c697a;background:#f7f9fc;padding:10px;white-space:nowrap}
+.health-table td{border-top:1px solid #e8ecf1;padding:12px 10px;vertical-align:top;font-variant-numeric:tabular-nums}
+.health-table td:first-child{min-width:145px}
+.health-table small{display:block;font-size:10px;color:#657386;line-height:1.8;margin-top:3px}
+.health-table small.health-caution{color:#84520b}
+.health-details{border-bottom:1px solid #e7ebf1;padding:18px 3px;font-size:11px;line-height:1.9;color:#657386}
+.health-details summary{cursor:pointer;color:#354b65;font-weight:600}
+.health-recovery{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 2px}
+.health-recovery p{font-size:11px;line-height:1.8;color:#657386;margin:5px 0}
+.health-recovery button{flex-shrink:0}
+.health-error{background:#fff5ee;border:1px solid #d8ab86;border-radius:9px;padding:12px 15px;margin:14px 0;font-size:12px;line-height:1.8;color:#794815}
+#healthContent.is-stale{opacity:.65}
+#healthContent.is-stale .health-card{background:#f5f6f8;border-color:#d4dae2}
+.health-details summary:focus-visible,.health-content button:focus-visible{outline:2px solid #3776d6;outline-offset:3px}
+@media(max-width:1150px){.health-content{padding:28px 22px 50px}.health-cards{grid-template-columns:1fr}.health-card{padding:16px}.health-card-value{margin:7px 0}.health-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.health-metrics>div:nth-child(2){border-right:0}.health-metrics>div:nth-child(-n+2){border-bottom:1px solid #e7ebf0}}
+@media(prefers-reduced-motion:reduce){.sidebar{transition:none}.page-row{transition:none}}

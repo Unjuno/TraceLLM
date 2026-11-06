@@ -7,7 +7,7 @@
 同じページを何度でも投入でき、反復回数は1〜10周で指定できます。
 モデル出力は初期状態で非表示。クリックすると生成時の出力を確認できます。
 
-**v0.2は実験用の単一ユーザー・ローカルアプリです。** ダミー応答ではなく、
+**v0.3は実験用の単一ユーザー・ローカルアプリです。** ダミー応答ではなく、
 ランダム初期化したGPTの実際の推論と勾配更新を行います。学習データがない初期状態の
 出力は不自然な文字列です。日本語の会話能力や「本人の思考の再現」は保証しません。
 
@@ -31,7 +31,8 @@ trace-llm
 ```
 
 ブラウザで `http://127.0.0.1:8000` を開きます。
-保存先の既定値は `~/.local/share/trace-llm/` です。ソースリポジトリとは別の場所です。
+新規利用時はOS標準のユーザーデータ領域へ保存します。旧版の保存先にDBがあれば、
+その場所を引き続き使用し、自動移動はしません。詳しくは [デスクトップ起動](docs/desktop.md) を参照してください。
 
 ```bash
 trace-llm --data-dir /path/to/private/trace-data --port 8000 --threads 2
@@ -98,6 +99,8 @@ trace-llm --data-dir /path/to/private/trace-data --port 8000 --threads 2
 src/trace_llm/
   app.py         # localhost API + static UI + CLI
   engine.py      # page revisions, queue, training, generation, checkpoint publication
+  health.py      # read-only observations; no model loading or training
+  runtime.py     # native data paths and loopback-only desktop startup
   store.py       # SQLite schema and short transactions
   model.py       # scratch causal GPT with RoPE
   data.py        # byte tokenizer and page-local supervised windows
@@ -178,3 +181,18 @@ PYTHONPATH=src python benchmarks/cpu_study.py --section compile --output compile
 ```
 
 ベンチマークスクリプトはLinux用です。`quality` は3シードの探索実験であり、個人の日記の検証を代替しません。
+
+## v0.3: 学習の状態とデスクトップ起動
+
+左サイドバーに **学習の状態** を追加しました。処理の状態・過去の文章への適合の保持・
+未学習文への汎化を分けて表示します。初回投入前Lossは点で表示し、独立検証がない状態は
+「未評価」のままです。画面を開くだけでは学習・生成しません。
+詳しい指標と制約は [学習状態UIの説明](docs/learning-health.md) を参照してください。
+
+Windows/macOS/Linuxの [セットアップと対応範囲](docs/desktop.md) を追加しました。
+共通セットアップは `python scripts/install.py`（Python3.11–3.13）、起動は
+Windowsで`start.cmd`、macOSで`start.command`、Linuxで`start.sh`です。
+初期セットアップ時は通信しますが、実行時に本文を外部へ送信しません。
+新規保存先はOS標準のユーザーデータ領域、旧版の保存先が存在するときはそのまま使用します。
+現在の主要試験対象はWindows x64・macOS Apple Silicon・Linux x64です。
+**Intel macOSはPyTorch2.10公式wheelがないため標準対応外**です。古い版へ自動降格しません。
