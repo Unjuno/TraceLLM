@@ -14,6 +14,7 @@ import torch
 import uvicorn
 
 from .engine import Conflict, Engine, Missing
+from .training import TrainingConfig, model_config
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -39,19 +40,20 @@ class Feed(Payload):
 
 
 class Generation(Payload):
+    checkpoint_id: str | None = Field(default=None, min_length=1, max_length=32)
     revision: int = Field(ge=1)
     max_new_tokens: int = Field(default=64, ge=1, le=128)
     temperature: float = Field(default=0.8, ge=0, le=2, allow_inf_nan=False)
     seed: int = Field(default=42, ge=0, le=2147483647)
 
 
-def create_app(data_dir=None, worker=True):
+def create_app(data_dir=None, worker=True, config=None, training=None):
     root = Path(data_dir or os.environ.get('TRACE_DATA_DIR',
                 str(Path.home() / '.local' / 'share' / 'trace-llm')))
 
     @asynccontextmanager
     async def lifespan(app):
-        engine = Engine(root)
+        engine = Engine(root, config=config, training=training)
         app.state.engine = engine
         if worker:
             engine.start()
@@ -60,7 +62,7 @@ def create_app(data_dir=None, worker=True):
         finally:
             engine.close()
 
-    app = FastAPI(title='TraceLLM', version='0.1.0', lifespan=lifespan,
+    app = FastAPI(title='TraceLLM', version='0.2.0', lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', '[::1]'])
 
@@ -136,7 +138,7 @@ def create_app(data_dir=None, worker=True):
     @app.post('/api/pages/{page_id}/responses', status_code=201)
     def respond(page_id: str, data: Generation):
         return app.state.engine.respond(page_id, data.revision, data.max_new_tokens,
-                                        data.temperature, data.seed)
+                                        data.temperature, data.seed, data.checkpoint_id)
 
     @app.get('/api/pages/{page_id}/responses')
     def responses(page_id: str):
@@ -150,6 +152,10 @@ def create_app(data_dir=None, worker=True):
     def cancel(job_id: str):
         app.state.engine.cancel(job_id)
         return {'cancelled': True}
+
+    @app.get('/api/evaluations')
+    def evaluations():
+        return app.state.engine.evaluations()
 
     @app.get('/api/history')
     def history():
@@ -172,12 +178,33 @@ def main():
     parser.add_argument('--data-dir', type=Path)
     parser.add_argument('--port', type=int, default=8000)
     parser.add_argument('--threads', type=int, default=2)
+    parser.add_argument('--model-preset', choices=('seed', 'medium', 'small'),
+                        help='New data directory only; existing model is never resized')
+    parser.add_argument('--context', type=int, help='New model context, 1..1024 (default 256)')
+    parser.add_argument('--learning-rate', type=float, help='New store only (default 0.0003)')
+    parser.add_argument('--replay-ratio', type=float, help='New store only, 0..0.5 (default 0.25)')
+    parser.add_argument('--context-prefix', type=int, help='Masked left context for training')
+    parser.add_argument('--max-steps', type=int, help='Update safety cap, not a quality target')
+    parser.add_argument('--max-train-seconds', type=float, help='Soft train-loop budget; 0 disables')
+    parser.add_argument('--duty-cycle', type=float, help='Cooperative training duty fraction, (0,1]')
+    parser.add_argument('--batch-mode', choices=('separate', 'padded'))
     args = parser.parse_args()
     if not 1 <= args.port <= 65535 or not 1 <= args.threads <= 32:
         parser.error('Invalid port or thread count')
+    options = {name: getattr(args, name) for name in
+               ('learning_rate', 'replay_ratio', 'context_prefix', 'max_steps',
+                'max_train_seconds', 'duty_cycle', 'batch_mode') if getattr(args, name) is not None}
+    try:
+        training = TrainingConfig(**options) if options else None
+        config = (model_config(args.model_preset or 'seed', args.context or 256)
+                  if args.model_preset is not None or args.context is not None else None)
+        if args.context == 0:
+            raise ValueError('context must be positive')
+    except ValueError as exc:
+        parser.error(str(exc))
     os.umask(0o077)
     torch.set_num_threads(args.threads)
-    uvicorn.run(create_app(args.data_dir), host='127.0.0.1', port=args.port,
+    uvicorn.run(create_app(args.data_dir, config=config, training=training), host='127.0.0.1', port=args.port,
                 workers=1, access_log=False)
 
 
