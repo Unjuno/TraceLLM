@@ -49,6 +49,16 @@ window.TraceHealth = (() => {
       const opts=cps.map(c=>[c.id,`${c.id.slice(0,8)} · ${c.current?'現在':when(c.created)}`]);
       choices(node('healthModelA'),opts,cps.at(-1)?.id);choices(node('healthModelB'),opts,snapshot.current_checkpoint);
       node('healthCompareHint').textContent=!pages.length?'比較するには、本文のあるページを作成してください。':cps.length<2?'2つの保存済みモデルが必要です。学習すると比較できる状態が増えます。':'異なるモデルを選んでください。モデルの状態はこの操作では変更しません。';
+      if(cps.length > 1 && node('healthModelA').value === node('healthModelB').value){
+        // An initially untrained model is the only choice. After training,
+        // keep distinct comparison defaults rather than leaving comparison disabled.
+        const current=snapshot.current_checkpoint;
+        if(node('healthModelA').value === current){
+          node('healthModelA').value=cps.find(c=>c.id !== current)?.id || '';
+        }else{
+          node('healthModelB').value=cps.some(c=>c.id === current)?current:(cps.find(c=>c.id !== node('healthModelA').value)?.id || '');
+        }
+      }
       compareReady();
     }
     function detail(row){const dialog=el('dialog','health-detail');dialog.append(el('h2','',`学習ジョブ ${row.job_id.slice(0,8)}`));const list=el('dl');

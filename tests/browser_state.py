@@ -46,22 +46,22 @@ def main():
                 browser=getattr(p,args.browser).launch(**options)
                 page=browser.new_page(viewport={'width':1440,'height':980})
                 errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
-                html=(STATIC/'index.html').read_text()
+                html=(STATIC/'index.html').read_text(encoding='utf-8')
                 html=re.sub(r'<link[^>]*rel="stylesheet"[^>]*>', '', html)
                 html=re.sub(r'<script[^>]*src="[^"]+"[^>]*></script>', '', html)
                 page.set_content(html)
-                page.add_style_tag(content=(STATIC/'style.css').read_text()+'\n'+(STATIC/'health.css').read_text())
+                page.add_style_tag(content=(STATIC/'style.css').read_text(encoding='utf-8')+'\n'+(STATIC/'health.css').read_text(encoding='utf-8'))
                 page.expose_binding('__traceHttp',bridge)
                 page.evaluate('''() => { window.fetch = async (url, options={}) => {
                     const r=await window.__traceHttp(String(url),options);
                     return {ok:r.status>=200&&r.status<300,status:r.status,
                       json:async()=>JSON.parse(r.text)};
                 }; }''')
-                page.add_script_tag(content=(STATIC/'health.js').read_text())
+                page.add_script_tag(content=(STATIC/'health.js').read_text(encoding='utf-8'))
                 # The shipped app injects the pure transition module before app.js.
                 if (STATIC/'ui_machine.js').exists():
-                    page.add_script_tag(content=(STATIC/'ui_machine.js').read_text())
-                page.add_script_tag(content=(STATIC/'app.js').read_text())
+                    page.add_script_tag(content=(STATIC/'ui_machine.js').read_text(encoding='utf-8'))
+                page.add_script_tag(content=(STATIC/'app.js').read_text(encoding='utf-8'))
                 expect(page.locator('#body')).to_have_value('これはUI検証のための人工的な文章です。')
                 # A crashed background trainer must not look merely "queued".
                 client.app.state.engine._worker_error = 'RuntimeError'

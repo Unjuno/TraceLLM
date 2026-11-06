@@ -44,9 +44,9 @@ def main():
                             if client.get('/api/healthz').status_code==200: break
                         except httpx.TransportError: pass
                         if process.poll() is not None:
-                            raise AssertionError(log.read_text())
+                            raise AssertionError(log.read_text(encoding='utf-8'))
                         time.sleep(.25)
-                    else: raise AssertionError('Server did not start: '+log.read_text())
+                    else: raise AssertionError('Server did not start: '+log.read_text(encoding='utf-8'))
                     with sync_playwright() as p:
                         launch={}
                         if args.browser=='chromium' and os.environ.get('TRACE_BROWSER_EXECUTABLE'):
@@ -93,6 +93,10 @@ def main():
                             page.keyboard.press('Escape')
                             before_jobs=len(client.get('/api/history').json()['jobs'])
                             page.locator('#healthModelA').select_option(initial)
+                            # With at least two checkpoints, an initial single-choice
+                            # selection must become a usable A/B pair.
+                            expect(page.locator('#healthCompare')).to_be_enabled(timeout=10000)
+                            assert page.locator('#healthModelA').input_value() != page.locator('#healthModelB').input_value()
                             page.locator('#healthCompare').click()
                             expect(page.locator('#healthOutputs article')).to_have_count(2,timeout=30000)
                             assert page.locator('#healthOutputs pre').count()==0
@@ -103,7 +107,7 @@ def main():
                             expect(page.locator('#healthOutputs pre')).to_have_count(0)
                             with page.expect_download() as download:
                                 page.locator('#healthExport').click()
-                            data=json.loads(Path(download.value.path()).read_text())
+                            data=json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
                             assert data['summary']['succeeded']==3
                             assert data['quality']['independent_validation']=='unavailable'
                             assert '動作確認専用' not in json.dumps(data,ensure_ascii=False)
