@@ -6,31 +6,84 @@ permissions:
   contents: read
 jobs:
   python:
-    runs-on: ubuntu-latest
+    name: python (${{ matrix.os }}, ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.11', '3.13']
+        include:
+          - os: ubuntu-24.04
+            python-version: '3.11'
+          - os: ubuntu-24.04
+            python-version: '3.13'
+          - os: windows-2022
+            python-version: '3.11'
+          - os: macos-15
+            python-version: '3.11'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install 'torch>=2.10,<2.11' --index-url https://download.pytorch.org/whl/cpu
-      - run: python -m pip install -e '.[dev]'
+      - name: CPU PyTorch (Linux and Windows)
+        if: runner.os != 'macOS'
+        run: python -m pip install "torch>=2.10,<2.11" --index-url https://download.pytorch.org/whl/cpu
+      - name: Native PyTorch (Apple Silicon, CPU execution)
+        if: runner.os == 'macOS'
+        run: python -m pip install "torch>=2.10,<2.11"
+      - run: python -m pip install -e ".[dev]"
       - run: python -m pytest -q
         env:
           OMP_NUM_THREADS: '1'
       - run: python -m compileall -q src
+      - name: Browser-state reducer tests
+        run: node --test tests/ui_machine.test.cjs
+      - run: python -m trace_llm --help
   browser:
-    runs-on: ubuntu-latest
+    name: browser (${{ matrix.os }}, ${{ matrix.browser }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            browser: chromium
+          - os: windows-2022
+            browser: chromium
+          - os: macos-15
+            browser: chromium
+          - os: macos-15
+            browser: webkit
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
-      - run: python -m pip install 'torch>=2.10,<2.11' --index-url https://download.pytorch.org/whl/cpu
-      - run: python -m pip install -e '.[dev]'
-      - run: python -m playwright install --with-deps chromium
-      - run: python tests/browser_smoke.py
+          python-version: '3.11'
+      - if: runner.os != 'macOS'
+        run: python -m pip install "torch>=2.10,<2.11" --index-url https://download.pytorch.org/whl/cpu
+      - if: runner.os == 'macOS'
+        run: python -m pip install "torch>=2.10,<2.11"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - name: Existing page/swipe/restore regression
+        if: matrix.browser == 'chromium'
+        run: python tests/browser_smoke.py
         env:
           OMP_NUM_THREADS: '1'
+      - name: Editor conflict and state integration
+        run: python tests/browser_state.py --browser ${{ matrix.browser }} --screenshot artifacts/state-${{ matrix.browser }}.png
+        env:
+          OMP_NUM_THREADS: '1'
+      - name: Learning health desktop integration
+        run: python tests/browser_health.py --browser ${{ matrix.browser }} --artifacts artifacts
+        env:
+          OMP_NUM_THREADS: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: health-${{ matrix.os }}-${{ matrix.browser }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 7

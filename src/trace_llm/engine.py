@@ -17,6 +17,7 @@ import torch
 from .data import BOS, EOS, decode, encode, windows, replay_window
 from .model import Config, GPT, optimizer
 from .store import Store
+from .lifecycle import transition_job, InvalidTransition, checkpoint_state
 from .evaluation import score_examples, retention_probes, target_count
 from .training import TrainingConfig, TOKENIZER, backward_examples, validate_tokenizer
 
@@ -65,6 +66,7 @@ class Engine:
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._thread = None
+        self._worker_error = None
         if max_steps is not None and (type(max_steps) is not int or max_steps < 1):
             self.lockfile.release()
             raise ValueError('max_steps must be positive')
@@ -74,8 +76,10 @@ class Engine:
             self.checkpoint_dir.mkdir(exist_ok=True, mode=0o700)
             self.store = Store(self.root / 'trace.sqlite3')
             with self.store.connect(True) as db:
-                db.execute("UPDATE jobs SET status='failed', error='Interrupted before publication', "
-                           "finished=? WHERE status='running'", (time.time(),))
+                # Crash recovery is a running -> failed transition, never a retry.
+                for row in db.execute("SELECT id FROM jobs WHERE status='running'").fetchall():
+                    transition_job(db, row['id'], 'running', 'failed',
+                                   error='Interrupted before publication', finished=time.time())
             if not self.store.rows("SELECT value FROM meta WHERE key='current'"):
                 config = config or Config()
                 policy = training or TrainingConfig()
@@ -122,13 +126,24 @@ class Engine:
         self._thread.start()
 
     def _worker(self):
+        """Fail visibly if the worker loop itself breaks before claiming a job.
+
+        A job-specific failure is already committed as `failed` by train_next().
+        Unexpected storage/maintenance failures must never leave a queue with
+        an apparently healthy but dead worker thread.
+        """
         last_prune = 0
-        while not self._stop.is_set():
-            if time.time() - last_prune > 60:
-                self.prune()
-                last_prune = time.time()
-            if not self.train_next():
-                self._stop.wait(0.2)
+        try:
+            while not self._stop.is_set():
+                if time.time() - last_prune > 60:
+                    self.prune()
+                    last_prune = time.time()
+                if not self.train_next():
+                    self._stop.wait(0.2)
+        except Exception as exc:
+            # Expose the type rather than details that may contain local paths.
+            self._worker_error = type(exc).__name__
+            self._stop.set()
 
     def _current(self):
         return self.store.rows("SELECT value FROM meta WHERE key='current'")[0]['value']
@@ -154,6 +169,7 @@ class Engine:
         checkpoint_id, now = uid(), time.time()
         final = self.checkpoint_dir / (checkpoint_id + '.pt')
         temporary = final.with_suffix('.tmp')
+        published = False
         try:
             with temporary.open('wb') as stream:
                 torch.save(payload, stream)
@@ -170,18 +186,33 @@ class Engine:
                     os.close(descriptor)
             sha = digest(final.read_bytes())
             with self.store.connect(True) as db:
+                if previous:
+                    current = db.execute("SELECT value FROM meta WHERE key='current'").fetchone()
+                    if not current or current['value'] != previous:
+                        raise Conflict('Model changed before checkpoint publication')
+                if job_id:
+                    active = db.execute("SELECT p.id FROM jobs j JOIN versions v "
+                                        "ON v.id=j.version_id JOIN pages p ON p.id=v.page_id "
+                                        "WHERE j.id=? AND j.status='running' AND p.deleted=0",
+                                        (job_id,)).fetchone()
+                    if not active:
+                        raise InvalidTransition('Training source removed or job no longer running')
                 db.execute('INSERT INTO checkpoints VALUES(?,?,?,?,?,?,?,1)',
                            (checkpoint_id, parent, previous, kind, now, now + 7*DAY, sha))
                 if previous:
                     db.execute('UPDATE checkpoints SET expires=MAX(expires,?) WHERE id=?',
                                (now + 7*DAY, previous))
-                db.execute("INSERT OR REPLACE INTO meta VALUES('current',?)", (checkpoint_id,))
                 if job_id:
-                    db.execute("UPDATE jobs SET status='succeeded', after_id=?, finished=?, "
-                               "metrics=? WHERE id=?", (checkpoint_id, now,
-                                                        json.dumps(metrics), job_id))
+                    transition_job(db, job_id, 'running', 'succeeded',
+                                   after_id=checkpoint_id, finished=now,
+                                   metrics=json.dumps(metrics))
+                db.execute("INSERT OR REPLACE INTO meta VALUES('current',?)", (checkpoint_id,))
+            published = True
         finally:
             temporary.unlink(missing_ok=True)
+            if not published:
+                # DB rollback cannot reference this file: remove an orphan immediately.
+                final.unlink(missing_ok=True)
         return self.store.rows('SELECT * FROM checkpoints WHERE id=?', (checkpoint_id,))[0]
 
     def create_page(self, title, body):
@@ -230,9 +261,11 @@ class Engine:
             if not db.execute('UPDATE pages SET deleted=1 WHERE id=? AND deleted=0',
                               (page_id,)).rowcount:
                 raise Missing('Page not found')
-            db.execute("UPDATE jobs SET status='cancelled',finished=? WHERE status='queued' "
-                       'AND version_id IN (SELECT id FROM versions WHERE page_id=?)',
-                       (time.time(), page_id))
+            queued = db.execute("SELECT id FROM jobs WHERE status='queued' "
+                                'AND version_id IN (SELECT id FROM versions WHERE page_id=?)',
+                                (page_id,)).fetchall()
+            for row in queued:
+                transition_job(db, row['id'], 'queued', 'cancelled', finished=time.time())
 
     @control_locked
     def feed(self, page_id, revision, repeats, request_key):
@@ -264,9 +297,10 @@ class Engine:
     @control_locked
     def cancel(self, job_id):
         with self.store.connect(True) as db:
-            if not db.execute("UPDATE jobs SET status='cancelled', finished=? "
-                              "WHERE id=? AND status='queued'", (time.time(), job_id)).rowcount:
-                raise Conflict('Only queued jobs can be cancelled')
+            try:
+                transition_job(db, job_id, 'queued', 'cancelled', finished=time.time())
+            except InvalidTransition as exc:
+                raise Conflict('Only queued jobs can be cancelled') from exc
 
     @staticmethod
     def _score(model, text):
@@ -283,8 +317,8 @@ class Engine:
                     return False
                 job = dict(job)
                 before = self._current()
-                db.execute("UPDATE jobs SET status='running', started=?, before_id=? WHERE id=?",
-                           (time.time(), before, job['id']))
+                transition_job(db, job['id'], 'queued', 'running',
+                               started=time.time(), before_id=before)
             wall_start, cpu_start = time.perf_counter(), time.process_time()
             try:
                 with torch.random.fork_rng(devices=[]):
@@ -414,9 +448,9 @@ class Engine:
                     self._publish(payload, before, before, 'train', job['id'], metrics)
             except Exception as exc:
                 with self.store.connect(True) as db:
-                    db.execute("UPDATE jobs SET status='failed',finished=?,error=? WHERE id=? "
-                               "AND status='running'", (time.time(), type(exc).__name__ +
-                               ': training failed; previous checkpoint preserved', job['id']))
+                    transition_job(db, job['id'], 'running', 'failed', finished=time.time(),
+                                   error=type(exc).__name__ +
+                                   ': training failed; previous checkpoint preserved')
             return True
 
     def evaluations(self):
@@ -484,13 +518,17 @@ class Engine:
 
     def status(self):
         current = self._current()
+        worker = {'state': ('failed' if self._worker_error else
+                            'running' if self._thread and self._thread.is_alive() else
+                            'stopped'), 'error': self._worker_error}
         counts = self.store.rows("SELECT status,COUNT(*) AS count FROM jobs GROUP BY status")
         return {'checkpoint_id': current, 'config': asdict(self.config),
                 'parameters': 12*self.config.layers*self.config.width**2 +
                 (258+2*self.config.layers+1)*self.config.width,
                 'jobs': {row['status']: row['count'] for row in counts},
                 'retention_days': 7, 'device': 'cpu', 'precision': 'float32',
-                'training': asdict(self.training), 'cpu_threads': torch.get_num_threads()}
+                'training': asdict(self.training), 'cpu_threads': torch.get_num_threads(),
+                'worker': worker}
 
     def history(self):
         jobs = self.store.rows('SELECT j.*,p.title,v.revision,v.page_id FROM jobs j '
@@ -500,10 +538,11 @@ class Engine:
             job['metrics'] = json.loads(job['metrics'])
         checkpoints = self.store.rows('SELECT * FROM checkpoints ORDER BY created DESC LIMIT 200')
         current = self._current()
+        now = time.time()
         for cp in checkpoints:
             cp['current'] = cp['id'] == current
-            cp['restorable'] = bool(cp['available'] and
-                                    (cp['current'] or cp['expires'] > time.time()))
+            cp['state'] = checkpoint_state(cp['available'], cp['current'], cp['expires'], now)
+            cp['restorable'] = cp['state'] in ('current', 'restorable')
         return {'jobs': jobs, 'checkpoints': checkpoints, 'current': current}
 
     @control_locked
